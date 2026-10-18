@@ -4,16 +4,16 @@ import discord
 from discord.ext import commands
 
 
-ROLE_NAMES = [
-    "Pro",
-    "Master",
-    "Legenda",
-    "Mityk",
-    "Diament",
-    "Gold",
-    "Silver",
-    "Bronze",
-]
+ROLE_NAMES = {
+    "Pro": "🦠・Pro",
+    "Master": "🏆・Master",
+    "Legenda": "🪬・Legenda",
+    "Mityk": "👾・Mytic",
+    "Diament": "💎・Diament",
+    "Gold": "🪎・Gold",
+    "Silver": "🪙・Silver",
+    "Bronze": "💩・Bronze",
+}
 
 EMOJI_NAMES = {
     "Pro": "prorank",
@@ -27,23 +27,9 @@ EMOJI_NAMES = {
 }
 
 
-def normalize(text):
-    return " ".join(text.casefold().split())
-
-
-def find_role(guild, wanted_name):
-    wanted = normalize(wanted_name)
-
-    for role in guild.roles:
-        if normalize(role.name) == wanted:
-            return role
-
-    return None
-
-
-def find_emoji(guild, wanted_name):
+def find_emoji(guild, name):
     for emoji in guild.emojis:
-        if emoji.name and emoji.name.casefold() == wanted_name.casefold():
+        if emoji.name and emoji.name.casefold() == name.casefold():
             return emoji
     return None
 
@@ -52,7 +38,7 @@ class RoleButton(
     discord.ui.DynamicItem[discord.ui.Button],
     template=r"rankbutton:(?P<role_id>[0-9]+)"
 ):
-    def __init__(self, role_id: int, label: str, emoji=None):
+    def __init__(self, role_id, label, emoji=None):
         self.role_id = role_id
 
         button = discord.ui.Button(
@@ -65,9 +51,8 @@ class RoleButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match):
-        role_id = int(match["role_id"])
         return cls(
-            role_id,
+            int(match["role_id"]),
             item.label or "Ranga",
             item.emoji
         )
@@ -93,21 +78,19 @@ class RoleButton(
             )
             return
 
-        member = interaction.user
-
         try:
-            if role in member.roles:
-                await member.remove_roles(
+            if role in interaction.user.roles:
+                await interaction.user.remove_roles(
                     role,
-                    reason="Uzytkownik kliknal panel rang"
+                    reason="Klikniecie panelu rang"
                 )
-                message = f"Odebrano range {role.name}."
+                message = f"Odebrano range: {role.name}"
             else:
-                await member.add_roles(
+                await interaction.user.add_roles(
                     role,
-                    reason="Uzytkownik kliknal panel rang"
+                    reason="Klikniecie panelu rang"
                 )
-                message = f"Nadano range {role.name}."
+                message = f"Nadano range: {role.name}"
 
             await interaction.response.send_message(
                 message,
@@ -117,9 +100,10 @@ class RoleButton(
         except discord.Forbidden:
             await interaction.response.send_message(
                 "Bot nie moze nadac tej rangi. Sprawdz "
-                "uprawnienie Zarzadzanie rolami oraz hierarchie rang.",
+                "uprawnienie Zarzadzanie rolami i hierarchie rang.",
                 ephemeral=True
             )
+
         except discord.HTTPException:
             if not interaction.response.is_done():
                 await interaction.response.send_message(
@@ -132,12 +116,12 @@ class RolePanelView(discord.ui.View):
     def __init__(self, guild, roles):
         super().__init__(timeout=None)
 
-        for role in roles:
-            emoji_name = EMOJI_NAMES[role.name]
+        for label, role in roles:
+            emoji_name = EMOJI_NAMES[label]
             emoji = find_emoji(guild, emoji_name)
 
             self.add_item(
-                RoleButton(role.id, role.name, emoji=emoji)
+                RoleButton(role.id, label, emoji=emoji)
             )
 
 
@@ -161,60 +145,51 @@ class Roles(commands.Cog):
             await ctx.send("Uzyj tej komendy na serwerze.")
             return
 
-        roles_by_name = {
-            normalize(role.name): role
-            for role in ctx.guild.roles
-        }
-
         roles = []
-        missing_roles = []
+        missing = []
 
-        for name in ROLE_NAMES:
-            role = roles_by_name.get(normalize(name))
+        for label, full_name in ROLE_NAMES.items():
+            role = discord.utils.get(
+                ctx.guild.roles,
+                name=full_name
+            )
 
             if role is None:
-                missing_roles.append(name)
+                missing.append(full_name)
             elif role.is_default() or role.managed:
-                missing_roles.append(name)
+                missing.append(full_name)
             else:
-                roles.append(role)
+                roles.append((label, role))
 
-        if missing_roles:
-            all_names = [
-                role.name for role in ctx.guild.roles
-                if not role.is_default()
-            ]
-
+        if missing:
             await ctx.send(
-                "Nie znalazlem rang: "
-                + ", ".join(missing_roles)
-                + "\nNazwy rang widoczne dla bota: "
-                + (", ".join(all_names) if all_names else "brak")
+                "Nie znaleziono rang:\n" + "\n".join(missing)
             )
             return
 
-        missing_emojis = [
-            f":{emoji_name}:"
-            for emoji_name in EMOJI_NAMES.values()
-            if find_emoji(ctx.guild, emoji_name) is None
-        ]
+        missing_emojis = []
+
+        for emoji_name in EMOJI_NAMES.values():
+            if find_emoji(ctx.guild, emoji_name) is None:
+                missing_emojis.append(f":{emoji_name}:")
 
         embed = discord.Embed(
-            title="🏆 Wybierz swoja range",
+            title="🏆 Wybierz swoją rangę",
             description=(
-                "Kliknij przycisk, aby otrzymac range.\n"
-                "Kliknij go ponownie, aby ja odebrac."
+                "Kliknij przycisk, aby otrzymać rangę.\n"
+                "Kliknij go ponownie, aby ją odebrać.\n\n"
+                "Możesz wybrać kilka rang."
             ),
             color=discord.Color.blurple()
         )
 
         if missing_emojis:
             embed.add_field(
-                name="Brakujace emotki",
+                name="Brakujące emotki",
                 value=(
                     "Nie znaleziono: "
                     + ", ".join(missing_emojis)
-                    + ". Sprawdz nazwy emotek na serwerze."
+                    + ". Te przyciski będą bez własnej emotki."
                 ),
                 inline=False
             )
