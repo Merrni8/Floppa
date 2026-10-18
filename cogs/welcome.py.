@@ -1,0 +1,87 @@
+
+import os
+import discord
+from discord.ext import commands
+
+
+def get_channel(guild, env_name):
+    value = os.getenv(env_name, "").strip()
+
+    if not value.isdigit():
+        return None
+
+    channel = guild.get_channel(int(value))
+
+    if isinstance(channel, discord.TextChannel):
+        return channel
+
+    return None
+
+
+class Welcome(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        channel = get_channel(
+            member.guild,
+            "WELCOME_CHANNEL_ID"
+        )
+
+        if channel is None:
+            return
+
+        embed = discord.Embed(
+            title="👋 Witamy na serwerze!",
+            description=(
+                f"Cześć {member.mention}!\n\n"
+                f"Miło Cię widzieć na **{member.guild.name}**!\n"
+                "Zapoznaj się z regulaminem i baw się dobrze! 🎉"
+            ),
+            color=discord.Color.green()
+        )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(
+            text=f"Jesteś użytkownikiem nr {member.guild.member_count}"
+        )
+
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException as error:
+            print(f"Nie udało się wysłać powitania: {error}")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        channel = get_channel(
+            member.guild,
+            "GOODBYE_CHANNEL_ID"
+        )
+
+        if channel is None:
+            return
+
+        embed = discord.Embed(
+            title="🚪 Użytkownik opuścił serwer",
+            description=(
+                f"**{discord.utils.escape_markdown(member.name)}** "
+                "opuścił serwer.\n\n"
+                f"Do zobaczenia na **{member.guild.name}**!"
+            ),
+            color=discord.Color.orange()
+        )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(
+            text=f"Pozostało osób: {member.guild.member_count}"
+        )
+
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException as error:
+            print(f"Nie udało się wysłać pożegnania: {error}")
+
+
+async def setup(bot):
+    await bot.add_cog(Welcome(bot))
