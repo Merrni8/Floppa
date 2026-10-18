@@ -38,8 +38,7 @@ async def on_ready():
         print(f"Lacznie: {len(synced)}")
 
     except Exception as e:
-        print(f"Blad synchronizacji komend: {e}")
-
+    print(f"Blad {cog}: {type(e).__name__}: {e}")
 
 async def load_cogs():
     cogs = [
