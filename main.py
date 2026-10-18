@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = os.getenv("GUILD_ID")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -23,8 +24,19 @@ async def on_ready():
     print(f"Zalogowano jako {bot.user}")
 
     try:
-        synced = await bot.tree.sync()
-        print(f"Zsynchronizowano {len(synced)} komend.")
+        if GUILD_ID:
+            guild = discord.Object(id=int(GUILD_ID))
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+        else:
+            synced = await bot.tree.sync()
+
+        print("Zsynchronizowane komendy:")
+        for command in synced:
+            print(f"- /{command.name}")
+
+        print(f"Lacznie: {len(synced)}")
+
     except Exception as e:
         print(f"Blad synchronizacji komend: {e}")
 
