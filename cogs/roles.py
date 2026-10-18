@@ -1,3 +1,4 @@
+
 import discord
 from discord.ext import commands
 
@@ -10,7 +11,7 @@ class SelfRoleSelect(discord.ui.Select):
             discord.SelectOption(
                 label=role.name[:100],
                 value=str(role.id),
-                description=f"Wybierz rolę: {role.name}"[:100]
+                description=f"Wybierz role: {role.name}"[:100]
             )
             for role in roles
         ]
@@ -24,13 +25,22 @@ class SelfRoleSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.guild or not isinstance(
-            interaction.user, discord.Member
-        ):
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "Tej funkcji używaj na serwerze.",
+                ephemeral=True
+            )
             return
 
-        selected_ids = {int(value) for value in self.values}
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "Nie udało się rozpoznać użytkownika.",
+                ephemeral=True
+            )
+            return
+
         member = interaction.user
+        selected_ids = {int(value) for value in self.values}
 
         roles = [
             interaction.guild.get_role(role_id)
@@ -42,6 +52,7 @@ class SelfRoleSelect(discord.ui.Select):
             role for role in roles
             if role.id in selected_ids and role not in member.roles
         ]
+
         to_remove = [
             role for role in roles
             if role.id not in selected_ids and role in member.roles
@@ -50,31 +61,34 @@ class SelfRoleSelect(discord.ui.Select):
         try:
             if to_add:
                 await member.add_roles(
-                    *to_add, reason="Samodzielny wybór roli"
+                    *to_add,
+                    reason="Samodzielny wybor roli"
                 )
 
             if to_remove:
                 await member.remove_roles(
-                    *to_remove, reason="Odznaczenie roli w panelu"
+                    *to_remove,
+                    reason="Odznaczenie roli w panelu"
                 )
 
             await interaction.response.send_message(
-                "Twoje role zostały zaktualizowane! 🎭",
+                "Twoje role zostaly zaktualizowane! 🎭",
                 ephemeral=True
             )
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                "Nie mogę zmienić tych ról. Sprawdź uprawnienia "
-                "Manage Roles oraz hierarchię ról bota.",
+                "Nie moge zmienic tych rol. Sprawdz, czy bot ma "
+                "uprawnienie Zarzadzanie rolami i czy jego rola "
+                "jest wyzej niz role do nadawania.",
                 ephemeral=True
             )
 
         except discord.HTTPException:
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "Discord zwrócił błąd podczas zmiany ról. "
-                    "Spróbuj ponownie.",
+                    "Wystapil blad Discorda podczas zmiany rol. "
+                    "Sprobuj ponownie.",
                     ephemeral=True
                 )
 
@@ -86,7 +100,9 @@ class SelfRoleView(discord.ui.View):
         for index in range(0, len(roles), 25):
             chunk = roles[index:index + 25]
             menu_number = index // 25 + 1
-            self.add_item(SelfRoleSelect(chunk, menu_number))
+            self.add_item(
+                SelfRoleSelect(chunk, menu_number)
+            )
 
 
 class Roles(commands.Cog):
@@ -95,53 +111,58 @@ class Roles(commands.Cog):
 
     @commands.hybrid_command(
         name="rolepanel",
-        description="Utwórz panel wyboru własnych ról"
+        description="Utworz panel wyboru wlasnych rol"
     )
     @commands.has_permissions(administrator=True)
     async def rolepanel(self, ctx, role_ids: str):
         if ctx.guild is None:
-            await ctx.send("Tej komendy używaj na serwerze.")
+            await ctx.send(
+                "Tej komendy uzywaj na serwerze."
+            )
             return
 
         try:
             ids = [
                 int(value.strip())
-                for value in role_ids.replace(" ", "").split(",")
+                for value in role_ids.split(",")
                 if value.strip()
             ]
         except ValueError:
             await ctx.send(
-                "Podaj poprawne ID rang oddzielone przecinkami."
+                "Podaj poprawne ID rol oddzielone przecinkami."
             )
             return
 
         if not ids:
-            await ctx.send("Nie podano żadnych rang.")
+            await ctx.send("Nie podano zadnych rol.")
             return
 
         if len(ids) != len(set(ids)):
-            await ctx.send("Nie podawaj tej samej rangi dwa razy.")
+            await ctx.send(
+                "Nie podawaj tej samej roli dwa razy."
+            )
             return
 
         if len(ids) > 125:
             await ctx.send(
-                "Możesz dodać maksymalnie 125 rang do jednego panelu."
+                "Mozesz dodac maksymalnie 125 rol do jednego panelu."
             )
             return
 
         roles = []
+
         for role_id in ids:
             role = ctx.guild.get_role(role_id)
 
             if role is None:
                 await ctx.send(
-                    f"Nie znaleziono rangi o ID `{role_id}`."
+                    f"Nie znaleziono roli o ID `{role_id}`."
                 )
                 return
 
             if role.is_default() or role.managed:
                 await ctx.send(
-                    f"Rangi {role.name} nie można udostępnić "
+                    f"Roli {role.name} nie mozna udostepnic "
                     "w panelu."
                 )
                 return
@@ -151,9 +172,9 @@ class Roles(commands.Cog):
         embed = discord.Embed(
             title="🎭 Wybierz swoje role",
             description=(
-                "Wybierz role z menu poniżej.\n"
-                "Możesz korzystać z kilku list. "
-                "Odznaczenie roli w danej liście ją odbierze."
+                "Wybierz role z menu ponizej.\n"
+                "Mozesz wybrac kilka rol. Odznaczenie roli "
+                "na danej liscie odbierze ja, jesli ja posiadasz."
             ),
             color=discord.Color.blurple()
         )
@@ -165,4 +186,4 @@ class Roles(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Roles(bot))u
+    await bot.add_cog(Roles(bot))
