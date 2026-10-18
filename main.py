@@ -19,11 +19,6 @@ bot = commands.Bot(
 )
 
 
-@bot.event
-async def on_ready():
-    print(f"Zalogowano jako {bot.user}")
-
-
 async def load_cogs():
     cogs = [
         "cogs.tickets",
@@ -40,6 +35,33 @@ async def load_cogs():
             print(f"Blad {cog}: {type(e).__name__}: {e}")
 
 
+@bot.event
+async def setup_hook():
+    await load_cogs()
+
+    try:
+        if GUILD_ID:
+            guild = discord.Object(id=int(GUILD_ID))
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+        else:
+            synced = await bot.tree.sync()
+
+        print("Zsynchronizowane komendy:")
+        for command in synced:
+            print(f"- /{command.name}")
+
+        print(f"Lacznie: {len(synced)}")
+
+    except Exception as e:
+        print(f"Blad synchronizacji: {type(e).__name__}: {e}")
+
+
+@bot.event
+async def on_ready():
+    print(f"Zalogowano jako {bot.user}")
+
+
 async def main():
     if not TOKEN:
         raise RuntimeError(
@@ -47,25 +69,6 @@ async def main():
         )
 
     async with bot:
-        await load_cogs()
-
-        try:
-            if GUILD_ID:
-                guild = discord.Object(id=int(GUILD_ID))
-                bot.tree.copy_global_to(guild=guild)
-                synced = await bot.tree.sync(guild=guild)
-            else:
-                synced = await bot.tree.sync()
-
-            print("Zsynchronizowane komendy:")
-            for command in synced:
-                print(f"- /{command.name}")
-
-            print(f"Lacznie: {len(synced)}")
-
-        except Exception as e:
-            print(f"Blad synchronizacji: {type(e).__name__}: {e}")
-
         await bot.start(TOKEN)
 
 
