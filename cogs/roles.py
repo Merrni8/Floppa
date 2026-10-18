@@ -1,187 +1,196 @@
 
 import discord
 from discord.ext import commands
+from typing import Optional
 
 
-class SelfRoleSelect(discord.ui.Select):
-    def __init__(self, roles, menu_number):
-        self.role_ids = {role.id for role in roles}
+class RoleButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"selfrole:(?P<role_id>[0-9]+)"
+):
+    def __init__(self, role_id: int, label: str):
+        self.role_id = role_id
 
-        options = [
-            discord.SelectOption(
-                label=role.name[:100],
-                value=str(role.id),
-                description=f"Wybierz role: {role.name}"[:100]
-            )
-            for role in roles
-        ]
-
-        super().__init__(
-            placeholder=f"Wybierz role ({menu_number})...",
-            min_values=0,
-            max_values=len(options),
-            options=options,
-            custom_id=f"selfroles:select:{menu_number}"
+        button = discord.ui.Button(
+            label=label[:80],
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"selfrole:{role_id}"
         )
 
+        super().__init__(button)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Button,
+        match
+    ):
+        role_id = int(match["role_id"])
+
+        role = (
+            interaction.guild.get_role(role_id)
+            if interaction.guild
+            else None
+        )
+
+        label = role.name if role else "Niedostepna rola"
+
+        return cls(role_id, label)
+
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.guild:
+        if interaction.guild is None:
             await interaction.response.send_message(
-                "Tej funkcji używaj na serwerze.",
+                "Ta funkcja dziala tylko na serwerze.",
                 ephemeral=True
             )
             return
 
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message(
-                "Nie udało się rozpoznać użytkownika.",
+                "Nie udalo sie rozpoznac uzytkownika.",
+                ephemeral=True
+            )
+            return
+
+        role = interaction.guild.get_role(self.role_id)
+
+        if role is None:
+            await interaction.response.send_message(
+                "Ta ranga juz nie istnieje.",
+                ephemeral=True
+            )
+            return
+
+        if role.is_default() or role.managed:
+            await interaction.response.send_message(
+                "Nie mozna nadac tej rangi.",
                 ephemeral=True
             )
             return
 
         member = interaction.user
-        selected_ids = {int(value) for value in self.values}
-
-        roles = [
-            interaction.guild.get_role(role_id)
-            for role_id in self.role_ids
-        ]
-        roles = [role for role in roles if role is not None]
-
-        to_add = [
-            role for role in roles
-            if role.id in selected_ids and role not in member.roles
-        ]
-
-        to_remove = [
-            role for role in roles
-            if role.id not in selected_ids and role in member.roles
-        ]
 
         try:
-            if to_add:
-                await member.add_roles(
-                    *to_add,
-                    reason="Samodzielny wybor roli"
-                )
-
-            if to_remove:
+            if role in member.roles:
                 await member.remove_roles(
-                    *to_remove,
-                    reason="Odznaczenie roli w panelu"
+                    role,
+                    reason="Uzytkownik odznaczyl range"
                 )
+                message = f"Odebrano range: **{role.name}**"
+            else:
+                await member.add_roles(
+                    role,
+                    reason="Uzytkownik wybral range"
+                )
+                message = f"Nadano range: **{role.name}**"
 
             await interaction.response.send_message(
-                "Twoje role zostaly zaktualizowane! 🎭",
+                message,
                 ephemeral=True
             )
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                "Nie moge zmienic tych rol. Sprawdz, czy bot ma "
-                "uprawnienie Zarzadzanie rolami i czy jego rola "
-                "jest wyzej niz role do nadawania.",
+                "Bot nie moze zmienic tej rangi. Sprawdz "
+                "uprawnienie Zarzadzanie rolami oraz to, "
+                "czy najwyzsza rola bota jest wyzej "
+                "od rangi do nadania.",
                 ephemeral=True
             )
 
         except discord.HTTPException:
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "Wystapil blad Discorda podczas zmiany rol. "
-                    "Sprobuj ponownie.",
+                    "Wystapil blad Discorda. Sprobuj ponownie.",
                     ephemeral=True
                 )
 
 
-class SelfRoleView(discord.ui.View):
+class RolePanelView(discord.ui.View):
     def __init__(self, roles):
         super().__init__(timeout=None)
 
-        for index in range(0, len(roles), 25):
-            chunk = roles[index:index + 25]
-            menu_number = index // 25 + 1
-            self.add_item(
-                SelfRoleSelect(chunk, menu_number)
-            )
+        for role in roles:
+            self.add_item(RoleButton(role.id, role.name))
 
 
 class Roles(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def cog_load(self):
+        self.bot.add_dynamic_items(RoleButton)
+
+    async def cog_unload(self):
+        self.bot.remove_dynamic_items(RoleButton)
+
     @commands.hybrid_command(
         name="rolepanel",
-        description="Utworz panel wyboru wlasnych rol"
+        description="Utworz panel przyciskow do wyboru rang"
     )
     @commands.has_permissions(administrator=True)
-    async def rolepanel(self, ctx, role_ids: str):
+    async def rolepanel(
+        self,
+        ctx,
+        role1: discord.Role,
+        role2: Optional[discord.Role] = None,
+        role3: Optional[discord.Role] = None,
+        role4: Optional[discord.Role] = None,
+        role5: Optional[discord.Role] = None,
+        role6: Optional[discord.Role] = None,
+        role7: Optional[discord.Role] = None,
+        role8: Optional[discord.Role] = None,
+        role9: Optional[discord.Role] = None,
+        role10: Optional[discord.Role] = None
+    ):
         if ctx.guild is None:
             await ctx.send(
                 "Tej komendy uzywaj na serwerze."
             )
             return
 
-        try:
-            ids = [
-                int(value.strip())
-                for value in role_ids.split(",")
-                if value.strip()
+        roles = [
+            role for role in [
+                role1, role2, role3, role4, role5,
+                role6, role7, role8, role9, role10
             ]
-        except ValueError:
+            if role is not None
+        ]
+
+        unique_roles = {role.id for role in roles}
+
+        if len(unique_roles) != len(roles):
             await ctx.send(
-                "Podaj poprawne ID rol oddzielone przecinkami."
+                "Nie wybieraj tej samej rangi kilka razy."
             )
             return
 
-        if not ids:
-            await ctx.send("Nie podano zadnych rol.")
-            return
-
-        if len(ids) != len(set(ids)):
-            await ctx.send(
-                "Nie podawaj tej samej roli dwa razy."
-            )
-            return
-
-        if len(ids) > 125:
-            await ctx.send(
-                "Mozesz dodac maksymalnie 125 rol do jednego panelu."
-            )
-            return
-
-        roles = []
-
-        for role_id in ids:
-            role = ctx.guild.get_role(role_id)
-
-            if role is None:
-                await ctx.send(
-                    f"Nie znaleziono roli o ID `{role_id}`."
-                )
-                return
-
+        for role in roles:
             if role.is_default() or role.managed:
                 await ctx.send(
-                    f"Roli {role.name} nie mozna udostepnic "
-                    "w panelu."
+                    f"Rangi **{role.name}** nie mozna "
+                    "udostepnic w tym panelu."
                 )
                 return
 
-            roles.append(role)
-
         embed = discord.Embed(
-            title="🎭 Wybierz swoje role",
+            title="🎭 Wybierz swoje rangi",
             description=(
-                "Wybierz role z menu ponizej.\n"
-                "Mozesz wybrac kilka rol. Odznaczenie roli "
-                "na danej liscie odbierze ja, jesli ja posiadasz."
+                "Kliknij przycisk, aby otrzymac range.\n"
+                "Kliknij go ponownie, aby ja odebrac.\n\n"
+                "Mozesz wybrac kilka rang."
             ),
             color=discord.Color.blurple()
         )
 
+        embed.set_footer(
+            text="Panel rang • Wybieraj, co Ci odpowiada"
+        )
+
         await ctx.send(
             embed=embed,
-            view=SelfRoleView(roles)
+            view=RolePanelView(roles)
         )
 
 
