@@ -23,22 +23,6 @@ bot = commands.Bot(
 async def on_ready():
     print(f"Zalogowano jako {bot.user}")
 
-    try:
-        if GUILD_ID:
-            guild = discord.Object(id=int(GUILD_ID))
-            bot.tree.copy_global_to(guild=guild)
-            synced = await bot.tree.sync(guild=guild)
-        else:
-            synced = await bot.tree.sync()
-
-        print("Zsynchronizowane komendy:")
-        for command in synced:
-            print(f"- /{command.name}")
-
-        print(f"Lacznie: {len(synced)}")
-
-    except Exception as e:
-    print(f"Blad {cog}: {type(e).__name__}: {e}")
 
 async def load_cogs():
     cogs = [
@@ -53,7 +37,7 @@ async def load_cogs():
             await bot.load_extension(cog)
             print(f"Zaladowano: {cog}")
         except Exception as e:
-            print(f"Blad {cog}: {e}")
+            print(f"Blad {cog}: {type(e).__name__}: {e}")
 
 
 async def main():
@@ -64,6 +48,24 @@ async def main():
 
     async with bot:
         await load_cogs()
+
+        try:
+            if GUILD_ID:
+                guild = discord.Object(id=int(GUILD_ID))
+                bot.tree.copy_global_to(guild=guild)
+                synced = await bot.tree.sync(guild=guild)
+            else:
+                synced = await bot.tree.sync()
+
+            print("Zsynchronizowane komendy:")
+            for command in synced:
+                print(f"- /{command.name}")
+
+            print(f"Lacznie: {len(synced)}")
+
+        except Exception as e:
+            print(f"Blad synchronizacji: {type(e).__name__}: {e}")
+
         await bot.start(TOKEN)
 
 
